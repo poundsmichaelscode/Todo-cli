@@ -4,5 +4,29 @@
     "done": false,
     "category": "study",
     "deadline": "2020-3-4"
+  },
+  {
+    "text": "gym",
+    "done": false,
+    "category": "work",
+    "deadline": "2025-09-28",
+    "priority": "High",
+    "repeat": "weekly"
+  },
+  {
+    "text": "Code",
+    "done": false,
+    "category": "study",
+    "deadline": "2025-09-30",
+    "priority": "High",
+    "repeat": "daily"
+  },
+  {
+    "text": "Read",
+    "done": false,
+    "category": "study",
+    "deadline": "2025-2-2",
+    "priority": "Medium",
+    "repeat": "daily"
   }
 ]

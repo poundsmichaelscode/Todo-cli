@@ -1,196 +1,254 @@
-// ===============================
-// 📌 TO-DO LIST APP (Node.js CLI)
-// ===============================
+
+//=============== 📌 TO-DO LIST APP (Node.js CLI)================
+
 
 // Import built-in Node.js modules
-const readline = require("readline"); // For reading user input/output in the terminal
-const fs = require("fs");             // For saving/loading tasks from a file
+const readline = require ("readline"); // Used for CLI input/output
+const fs = require ("fs");             // Used to save/load tasks to a JSON file
 
-// Create readline interface (handles user input/output)
+// Create readline interface (this allows user input in the terminal)
 const rl = readline.createInterface({
   input: process.stdin,   // Read from keyboard
-  output: process.stdout  // Write to terminal
+  output: process.stdout  // Display output in terminal
 });
 
-// Store tasks in an array (in memory)
+
+// Main storage for tasks (in memory)
 let todos = [];
 
 // ----------------- START APP -----------------
-loadTasks();   // Load saved tasks from file if available
-showMenu();    // Show the main menu when app starts
+loadTasks();      // Load saved tasks from file (if exists)
+checkOverdue();   // Check for overdue tasks immediately when app starts
+showMenu();       // Show the main menu
 
 // ----------------- FILE OPERATIONS -----------------
 
-// Load tasks from tasks.json (if it exists)
+// Load tasks from tasks.json into memory
 function loadTasks() {
-  if (fs.existsSync("tasks.json")) { // Check if file exists
-    todos = JSON.parse(fs.readFileSync("tasks.json")); // Read file, parse JSON into array
+  if (fs.existsSync("tasks.json")) { 
+    todos = JSON.parse(fs.readFileSync("tasks.json")); 
   }
 }
 
-// Save tasks into tasks.json
+// Save tasks array into tasks.json file
 function saveTasks() {
-  const text = JSON.stringify(todos, null, 2); // Convert array to formatted JSON text
-  fs.writeFileSync("tasks.json", text);        // Save JSON string into file
+  fs.writeFileSync("tasks.json", JSON.stringify(todos, null, 2));
 }
 
 // ----------------- TASK OPERATIONS -----------------
 
 // 1. Add Task
 function addTask() {
-  rl.question("\n🆕 Enter new task: ", (task) => { // Ask for task description
-    if (task.trim() === "") {                     // Prevent empty tasks
+  rl.question("\n🆕 Enter new task: ", (task) => {
+    if (task.trim() === "") { // Prevent empty task
       console.log("⚠️ Task cannot be empty.");
-      return showMenu(); // Go back to menu
+      return showMenu();
     }
 
+    // Ask user for additional task details
     rl.question("📂 Enter category (Work/Personal/Study): ", (category) => {
       rl.question("📅 Enter deadline (YYYY-MM-DD): ", (deadline) => {
-        
-        // Create new task object and add to array
-        todos.push({
-          text: task,
-          done: false, // New tasks are not completed by default
-          category: category || "General",  // Default if blank
-          deadline: deadline || "No deadline" // Default if blank
-        });
+        rl.question("⚡ Enter priority (High/Medium/Low): ", (priority) => {
+          rl.question("🔁 Recurring? (daily/weekly/monthly/none): ", (repeat) => {
 
-        saveTasks(); // Save updated list
-        console.log("✅ Task added successfully!");
-        showMenu();  // Return to menu
+            // Push a new task object into todos array
+            todos.push({
+              text: task,
+              done: false,                  // new tasks are incomplete by default
+              category: category || "General",
+              deadline: deadline || "No deadline",
+              priority: priority || "Medium",
+              repeat: repeat.toLowerCase() === "none" ? null : repeat.toLowerCase()
+            });
+
+            saveTasks(); // Save updated task list to file
+            console.log("✅ Task added successfully!");
+            showMenu();
+          });
+        });
       });
     });
   });
 }
 
-// 2. View Tasks
+//============== 2. View Tasks ================= //
 function viewTasks() {
   console.log("\n📋 Your To-Do List:");
 
-  if (todos.length === 0) { // If no tasks
+  if (todos.length === 0) {
     console.log("⚠️ No tasks yet.");
   } else {
-    // Loop through each task and print details
+    //================
+    //  Print all tasks with details =====================//
+     
     todos.forEach((t, i) => {
+      const overdue = isOverdue(t.deadline) && !t.done ? " ⏰OVERDUE" : "";
       console.log(
         `${i + 1}. ${t.done ? "✔" : "✖"} ${t.text} ` +
-        `(Category: ${t.category}, Deadline: ${t.deadline})`
+        `(Category: ${t.category}, Deadline: ${t.deadline}, Priority: ${t.priority}${t.repeat ? `, Repeat: ${t.repeat}` : ""})${overdue}`
       );
     });
   }
 
-  showMenu(); // Back to menu
+  showMenu();
 }
 
-// 3. Toggle Done/Undone
+//============= 3. Toggle Task Done/Undone =====================//
 function toggleTask() {
   rl.question("\n🔄 Enter task number to toggle: ", (num) => {
-    const index = parseInt(num) - 1; // Convert user input to array index (1 → 0)
+    const index = parseInt(num) - 1;
 
-    // Validate input
+    // Validate task number
     if (isNaN(index) || index < 0 || index >= todos.length) {
       console.log("❌ Invalid task number.");
       return showMenu();
     }
 
-    todos[index].done = !todos[index].done; // Flip status true <-> false
-    saveTasks(); // Save changes
+    // Flip done status
+    todos[index].done = !todos[index].done;
+
+    // 🔁 Handle recurring tasks:
+    // If the task is marked done AND has a repeat value, create a new future task
+    if (todos[index].done && todos[index].repeat) {
+      let nextDate = new Date(todos[index].deadline);
+
+      switch (todos[index].repeat) {
+        case "daily": nextDate.setDate(nextDate.getDate() + 1); break;
+        case "weekly": nextDate.setDate(nextDate.getDate() + 7); break;
+        case "monthly": nextDate.setMonth(nextDate.getMonth() + 1); break;
+      }
+
+      // Add the next occurrence of the recurring task
+      todos.push({
+        ...todos[index],               // copy all fields
+        done: false,                   // reset status to undone
+        deadline: nextDate.toISOString().split("T")[0] // format YYYY-MM-DD
+      });
+
+      console.log("🔁 New recurring task created.");
+    }
+
+    saveTasks();
     console.log("✅ Task status updated!");
     showMenu();
   });
 }
 
-// 4. Edit Task
+//============= 4. Edit Task ====================//
+
 function editTask() {
   rl.question("\n✏️ Enter task number to edit: ", (num) => {
     const index = parseInt(num) - 1;
 
-    // Validate input
     if (isNaN(index) || index < 0 || index >= todos.length) {
       console.log("❌ Invalid task number.");
       return showMenu();
     }
 
-    // Ask for new values (leave blank = keep old value)
-    rl.question("📝 Enter new task text (leave blank to keep same): ", (newText) => {
-      rl.question("📂 Enter new category (leave blank to keep same): ", (newCat) => {
-        rl.question("📅 Enter new deadline (YYYY-MM-DD, leave blank to keep same): ", (newDeadline) => {
-          
-          // Only update if user typed something
-          if (newText.trim() !== "") todos[index].text = newText;
-          if (newCat.trim() !== "") todos[index].category = newCat;
-          if (newDeadline.trim() !== "") todos[index].deadline = newDeadline;
+    // Allow updating individual fields (blank keeps old value)
+    rl.question("📝 Enter new task text (blank=keep): ", (newText) => {
+      rl.question("📂 Enter new category (blank=keep): ", (newCat) => {
+        rl.question("📅 Enter new deadline (YYYY-MM-DD, blank=keep): ", (newDeadline) => {
+          rl.question("⚡ Enter new priority (blank=keep): ", (newPrio) => {
 
-          saveTasks(); // Save changes
-          console.log("✅ Task updated!");
-          showMenu();
+            if (newText.trim()) todos[index].text = newText;
+            if (newCat.trim()) todos[index].category = newCat;
+            if (newDeadline.trim()) todos[index].deadline = newDeadline;
+            if (newPrio.trim()) todos[index].priority = newPrio;
+
+            saveTasks();
+            console.log("✅ Task updated!");
+            showMenu();
+          });
         });
       });
     });
   });
 }
 
-// 5. Delete Task
+//================ 5. Delete Task ========================//
 function deleteTask() {
   rl.question("\n🗑️ Enter task number to delete: ", (num) => {
     const index = parseInt(num) - 1;
 
-    // Validate input
     if (isNaN(index) || index < 0 || index >= todos.length) {
       console.log("❌ Invalid task number.");
       return showMenu();
     }
 
-    todos.splice(index, 1); // Remove 1 task at position "index"
-    saveTasks();            // Save updated list
+    todos.splice(index, 1); // remove one task
+    saveTasks();
     console.log("✅ Task deleted!");
     showMenu();
   });
 }
 
-// 6. Filter by Category
-function filterByCategory() {
-  rl.question("\n📂 Enter category to filter: ", (cat) => {
-    // Keep only tasks where category matches (case-insensitive)
-    const filtered = todos.filter(t => t.category.toLowerCase() === cat.toLowerCase());
+
+
+// ===================== NEW FEATURES ===================
+
+//================ 6. Search Tasks (by keyword in description)=============//
+
+function searchTasks() {
+  rl.question("\n🔎 Enter keyword to search: ", (kw) => {
+    const filtered = todos.filter(t => t.text.toLowerCase().includes(kw.toLowerCase()));
 
     if (filtered.length === 0) {
-      console.log(`⚠️ No tasks found in category: ${cat}`);
+      console.log("⚠️ No tasks found.");
     } else {
       filtered.forEach((t, i) => {
-        console.log(
-          `${i + 1}. ${t.done ? "✔" : "✖"} ${t.text} ` +
-          `(Category: ${t.category}, Deadline: ${t.deadline})`
-        );
-      });
-    }
-    showMenu(); // Back to menu
-  });
-}
-
-// 7. Filter by Deadline
-function filterByDeadline() {
-  rl.question("\n📅 Enter deadline (YYYY-MM-DD): ", (date) => {
-    // Select tasks due on or before given date
-    const filtered = todos.filter(t => new Date(t.deadline) <= new Date(date));
-
-    if (filtered.length === 0) {
-      console.log(`⚠️ No tasks due on/before ${date}`);
-    } else {
-      filtered.forEach((t, i) => {
-        console.log(
-          `${i + 1}. ${t.done ? "✔" : "✖"} ${t.text} ` +
-          `(Category: ${t.category}, Deadline: ${t.deadline})`
-        );
+        console.log(`${i + 1}. ${t.done ? "✔" : "✖"} ${t.text} (Category: ${t.category}, Deadline: ${t.deadline})`);
       });
     }
     showMenu();
   });
 }
 
-// ----------------- MENU SYSTEM -----------------
 
-// Show options menu
+//==================== 7. Sort Tasks (deadline, category, status, priority)=================//
+function sortTasks() {
+  console.log("\n🔽 Sort by: 1.Deadline  2.Category  3.Status  4.Priority");
+  rl.question("👉 Choose: ", (opt) => {
+    switch (opt) {
+      case "1": // sort by deadline (earliest first)
+        todos.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+        break;
+      case "2": // sort alphabetically by category
+        todos.sort((a, b) => a.category.localeCompare(b.category));
+        break;
+      case "3": // done first
+        todos.sort((a, b) => b.done - a.done);
+        break;
+      case "4": // priority order High > Medium > Low
+        const order = { High: 1, Medium: 2, Low: 3 };
+        todos.sort((a, b) => order[a.priority] - order[b.priority]);
+        break;
+      default:
+        console.log("❌ Invalid option.");
+    }
+    viewTasks(); // after sorting, show tasks
+  });
+}
+
+//============ 8. Overdue Task Warning  =================//
+function checkOverdue() {
+  const overdue = todos.filter(t => isOverdue(t.deadline) && !t.done);
+
+  if (overdue.length > 0) {
+    console.log("\n⏰ WARNING! You have overdue tasks:");
+    overdue.forEach(t => console.log(`- ${t.text} (Deadline: ${t.deadline})`));
+  }
+}
+
+// Helper: checks if a given deadline date is before today
+function isOverdue(deadline) {
+  if (!deadline || deadline === "No deadline") return false;
+  return new Date(deadline) < new Date();
+}
+
+// -----------------=========== MENU SYSTEM ==============-----------------//
+
+// ===========Main menu with options====================
 function showMenu() {
   console.log(`
  ==========================
@@ -203,11 +261,12 @@ function showMenu() {
  5. Delete Task
  6. Filter by Category
  7. Filter by Deadline
+ 8. Search Tasks 🔎
+ 9. Sort Tasks 🔽
  0. Exit
  --------------------------  
  `);
 
-  // Ask user to choose option
   rl.question("👉 Choose an option: ", (choice) => {
     switch (choice) {
       case "1": addTask(); break;
@@ -217,13 +276,10 @@ function showMenu() {
       case "5": deleteTask(); break;
       case "6": filterByCategory(); break;
       case "7": filterByDeadline(); break;
-      case "0": // Exit
-        console.log("👋 Goodbye!");
-        rl.close(); // Close readline interface
-        break;
-      default: // Handle invalid input
-        console.log("❌ Invalid option. Try again.");
-        showMenu(); // Show menu again
+      case "8": searchTasks(); break;
+      case "9": sortTasks(); break;
+      case "0": console.log("👋 Goodbye!"); rl.close(); break;
+      default: console.log("❌ Invalid option."); showMenu();
     }
   });
 }
